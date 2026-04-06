@@ -5,6 +5,7 @@ import streamlit as st
 
 import chatgpt_auth
 import chatgpt_usage as cgpt
+import claude_auth
 from claude_usage import CredentialsNotFoundError, RateLimitedError, TokenExpiredError, get_usage
 
 st.set_page_config(page_title="AI Quota Dashboard", page_icon="📊", layout="wide")
@@ -82,6 +83,42 @@ with refresh_col:
         st.cache_data.clear()
         st.rerun()
 
+# ── Claude login flow ─────────────────────────────────────────────────────────
+
+def _render_claude_login():
+    with st.container(border=True):
+        st.markdown("**Claude**", unsafe_allow_html=True)
+
+        pending = st.session_state.get("claude_pending")
+
+        if pending is None:
+            if st.button("Connect Claude", key="claude_connect"):
+                auth_url = claude_auth.start_pkce_auth()
+                st.session_state.claude_pending = {"auth_url": auth_url}
+                st.rerun()
+        else:
+            auth_url = pending["auth_url"]
+            st.markdown(
+                f"**1.** [Click here to authorize Claude]({auth_url})  \n"
+                "**2.** Sign in, then paste the code shown on the page:",
+                unsafe_allow_html=True,
+            )
+            code_input = st.text_input("Authorization code", key="claude_code_input", label_visibility="collapsed", placeholder="Paste code here…")
+            col_ok, col_cancel, _ = st.columns([1, 1, 5])
+            if col_ok.button("Connect", key="claude_code_submit") and code_input:
+                try:
+                    tokens = claude_auth.exchange_code(code_input)
+                    claude_auth.save_tokens(tokens)
+                    del st.session_state.claude_pending
+                    st.cache_data.clear()
+                    st.rerun()
+                except Exception as ex:
+                    st.error(f"Failed to exchange code: {ex}")
+            if col_cancel.button("Cancel", key="claude_cancel"):
+                del st.session_state.claude_pending
+                st.rerun()
+
+
 # ── Claude ────────────────────────────────────────────────────────────────────
 
 try:
@@ -112,7 +149,10 @@ except RateLimitedError as e:
 except TokenExpiredError as e:
     st.error(str(e))
 except CredentialsNotFoundError as e:
-    st.error(str(e))
+    if str(e) == "not_authenticated":
+        _render_claude_login()
+    else:
+        st.error(str(e))
 except Exception as e:
     st.error(f"Claude: {e}")
     st.exception(e)
