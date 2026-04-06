@@ -1,13 +1,20 @@
 services:
   dashboard:
     build: .
+    env_file:
+      - path: .env
+        required: false
     environment:
       - TZ=America/Los_Angeles
     volumes:
       - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      - chatgpt_data:/data
     networks:
       - private
     restart: unless-stopped
+
+volumes:
+  chatgpt_data:
 
 networks:
   private:

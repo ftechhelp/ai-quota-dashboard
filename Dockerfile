@@ -6,7 +6,9 @@ COPY pyproject.toml .
 
 RUN pip install --no-cache-dir streamlit requests
 
-COPY app.py claude_usage.py ./
+COPY *.py ./
+
+RUN mkdir -p /data
 
 EXPOSE 8501
 
