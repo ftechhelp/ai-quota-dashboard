@@ -50,7 +50,14 @@ def format_reset_time(value) -> str:
         else:
             ts = value / 1000 if value > 1e12 else value
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-        return dt.astimezone().strftime("%-H:%M %Z")
+        local = dt.astimezone()
+        now   = datetime.now(local.tzinfo)
+        if local.date() == now.date():
+            return local.strftime("%-H:%M %Z")
+        elif local.date() == (now + __import__("datetime").timedelta(days=1)).date():
+            return local.strftime("tomorrow %-H:%M %Z")
+        else:
+            return local.strftime("%a %-H:%M %Z")
     except Exception:
         return str(value)
 
@@ -218,7 +225,7 @@ try:
         quota_row("5 h", float(fh.get("utilization") or 0), fh.get("reset_at"))
         quota_row("7 d", float(sd.get("utilization") or 0), sd.get("reset_at"))
         if cr.get("utilization") is not None:
-            quota_row("code", float(cr.get("utilization") or 0), cr.get("reset_at"))
+            quota_row("code review", float(cr.get("utilization") or 0), cr.get("reset_at"))
 
     with st.expander("Raw · ChatGPT"):
         st.json(raw)
