@@ -1,0 +1,14 @@
+services:
+  dashboard:
+    build: .
+    environment:
+      - TZ=America/Los_Angeles
+    volumes:
+      - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+    networks:
+      - private
+    restart: unless-stopped
+
+networks:
+  private:
+    external: true
