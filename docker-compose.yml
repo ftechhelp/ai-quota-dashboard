@@ -7,7 +7,6 @@ services:
     environment:
       - TZ=America/Los_Angeles
     volumes:
-      - ~/.claude/.credentials.json:/root/.claude/.credentials.json:ro
       - chatgpt_data:/data
     networks:
       - private

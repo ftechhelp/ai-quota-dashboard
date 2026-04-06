@@ -30,19 +30,19 @@ def start_pkce_auth() -> str:
     code_challenge = base64.urlsafe_b64encode(
         hashlib.sha256(code_verifier.encode()).digest()
     ).rstrip(b"=").decode()
-    state = secrets.token_urlsafe(16)
-
+    # state = verifier (Anthropic's convention — not a separate random value)
     PKCE_FILE.parent.mkdir(parents=True, exist_ok=True)
-    PKCE_FILE.write_text(json.dumps({"code_verifier": code_verifier, "state": state}))
+    PKCE_FILE.write_text(json.dumps({"code_verifier": code_verifier}))
 
     params = {
-        "response_type":         "code",
+        "code":                  "true",
         "client_id":             CLIENT_ID,
+        "response_type":         "code",
         "redirect_uri":          REDIRECT_URI,
         "scope":                 SCOPES,
         "code_challenge":        code_challenge,
         "code_challenge_method": "S256",
-        "state":                 state,
+        "state":                 code_verifier,
     }
     return f"{AUTH_URL}?{urlencode(params)}"
 
@@ -52,19 +52,24 @@ def exchange_code(code: str) -> dict:
     if not PKCE_FILE.exists():
         raise RuntimeError("PKCE state not found. Start the auth flow again.")
 
-    pkce        = json.loads(PKCE_FILE.read_text())
+    pkce          = json.loads(PKCE_FILE.read_text())
     code_verifier = pkce["code_verifier"]
+
+    # Anthropic's callback page returns "authcode#state" — split to get the real code
+    parts     = code.strip().split("#")
+    auth_code = parts[0]
+    state     = parts[1] if len(parts) > 1 else code_verifier
 
     resp = requests.post(
         TOKEN_URL,
-        data={
+        json={
             "grant_type":    "authorization_code",
-            "code":          code.strip(),
+            "code":          auth_code,
+            "state":         state,
             "redirect_uri":  REDIRECT_URI,
             "client_id":     CLIENT_ID,
             "code_verifier": code_verifier,
         },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=15,
     )
     resp.raise_for_status()
@@ -82,12 +87,11 @@ def exchange_code(code: str) -> dict:
 def refresh_tokens(tokens: dict) -> dict:
     resp = requests.post(
         TOKEN_URL,
-        data={
+        json={
             "grant_type":    "refresh_token",
             "refresh_token": tokens["refresh_token"],
             "client_id":     CLIENT_ID,
         },
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
         timeout=15,
     )
     resp.raise_for_status()
