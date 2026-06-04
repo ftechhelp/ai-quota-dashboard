@@ -6,7 +6,7 @@ import streamlit as st
 import chatgpt_auth
 import chatgpt_usage as cgpt
 import claude_auth
-import github_usage as gh
+import opencode_go as ocgo
 from claude_usage import CredentialsNotFoundError, RateLimitedError, TokenExpiredError, get_usage
 
 st.set_page_config(page_title="AI Quota Dashboard", page_icon="📊", layout="wide")
@@ -32,8 +32,8 @@ def fetch_chatgpt():
     return cgpt.get_usage()
 
 @st.cache_data(ttl=300)
-def fetch_github():
-    return gh.get_usage()
+def fetch_opencode_go():
+    return ocgo.get_usage()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -241,56 +241,46 @@ except Exception as e:
     st.error(f"ChatGPT: {e}")
     st.exception(e)
 
-# ── GitHub Copilot ────────────────────────────────────────────────────────────
+# ── OpenCode Go ───────────────────────────────────────────────────────────────
 
 try:
-    gdata = fetch_github()
-    copilot_badge = f"`{gdata['copilot_plan']}`" if gdata.get("copilot_plan") else ""
-    github_badge  = f"`{gdata['github_plan']}`"  if gdata.get("github_plan")  else ""
+    odata = fetch_opencode_go()
+    limits = odata.get("limits", {})
 
-    COPILOT_LIMITS = {
-        "copilot pro": [
-            ("completions", "Unlimited"),
-            ("chat",        "Unlimited"),
-            ("premium req", "300 / month"),
-        ],
-        "copilot free": [
-            ("completions", "2,000 / month"),
-            ("chat",        "50 / month"),
-            ("premium req", "0"),
-        ],
-    }
-    plan_key = (gdata.get("copilot_plan") or "").lower()
-    limits   = COPILOT_LIMITS.get(plan_key, [])
+    WINDOWS = [
+        ("5 h", "five_hour"),
+        ("7 d", "weekly"),
+        ("30 d", "monthly"),
+    ]
 
     with st.container(border=True):
         header_col, link_col = st.columns([5, 1])
-        header_col.markdown(f"**GitHub Copilot** &nbsp; {copilot_badge or github_badge}", unsafe_allow_html=True)
+        header_col.markdown("**OpenCode Go** &nbsp; `subscription`", unsafe_allow_html=True)
         link_col.markdown(
             "<small>"
-            "<a href='https://github.com/settings/copilot/features' target='_blank'>quota →</a>"
-            " &nbsp; "
-            "<a href='https://github.com/settings/billing/summary' target='_blank'>billing →</a>"
+            "<a href='https://opencode.ai/auth' target='_blank'>console →</a>"
             "</small>",
             unsafe_allow_html=True,
         )
-        for label, value in limits:
-            c1, c2, c3 = st.columns([1, 5, 2])
-            c1.markdown(f"<small><b>{label}</b></small>", unsafe_allow_html=True)
-            c2.markdown("<small style='color:grey'>no live data — GitHub API unavailable</small>", unsafe_allow_html=True)
-            c3.markdown(f"<small>{value}</small>", unsafe_allow_html=True)
-        st.markdown(f"<small>Signed in as &nbsp;<b>{gdata['login']}</b></small>", unsafe_allow_html=True)
+        for label, key in WINDOWS:
+            window = odata.get(key) or {}
+            limit = limits.get(key)
+            row_label = f"{label}<br><small style='color:grey'>${limit:,.0f}</small>" if limit else label
+            quota_row(row_label, float(window.get("utilization") or 0), window.get("resets_at"))
 
-except gh.GithubTokenMissingError:
+    with st.expander("Raw · OpenCode Go"):
+        st.json(odata)
+
+except ocgo.OpenCodeGoKeyMissingError:
     with st.container(border=True):
-        st.markdown("**GitHub Copilot**", unsafe_allow_html=True)
-        st.caption("Add `GITHUB_TOKEN` to `.env` to enable this card.")
-except gh.GithubAuthError as e:
+        st.markdown("**OpenCode Go**", unsafe_allow_html=True)
+        st.caption("Add `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` to `.env` to enable this card.")
+except ocgo.OpenCodeGoAuthError as e:
     with st.container(border=True):
-        st.markdown("**GitHub Copilot**", unsafe_allow_html=True)
+        st.markdown("**OpenCode Go**", unsafe_allow_html=True)
         st.error(str(e))
 except Exception as e:
-    st.error(f"GitHub: {e}")
+    st.error(f"OpenCode Go: {e}")
     st.exception(e)
 
 

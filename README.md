@@ -57,16 +57,30 @@ The OpenAI card shows:
 
 If `OPENAI_API_KEY` is missing, the OpenAI card shows a config prompt and the Claude card still works normally.
 
+## OpenCode Go setup
+
+[OpenCode Go](https://opencode.ai/docs/go) is a subscription with rolling 5-hour ($12), weekly ($30), and monthly ($60) usage limits. There is no public usage API, so the dashboard scrapes the authenticated workspace console.
+
+Add to `.env`:
+
+```
+OPENCODE_GO_WORKSPACE_ID=        # the <id> from https://opencode.ai/workspace/<id>/go
+OPENCODE_GO_AUTH_COOKIE=         # value of the `auth` cookie (starts with Fe26.2**)
+```
+
+Grab the cookie from browser devtools → Application → Cookies → opencode.ai → `auth`. If either value is missing, the card shows a config prompt.
+
 ## Project structure
 
 ```
 app.py              # Streamlit UI
 claude_usage.py     # Anthropic OAuth usage API client
 openai_usage.py     # OpenAI usage API client
+opencode_go.py      # OpenCode Go console scraper
 Dockerfile
 docker-compose.yml
 pyproject.toml
-.env                # Not committed — holds OPENAI_API_KEY
+.env                # Not committed — holds OPENAI_API_KEY, OPENCODE_GO_* etc.
 ```
 
 ## Adding providers
