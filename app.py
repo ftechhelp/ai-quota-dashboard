@@ -144,6 +144,13 @@ try:
     with st.container(border=True):
         badge = f"`{sub_type}`" if sub_type else ""
         st.markdown(f"**Claude** &nbsp; {badge}", unsafe_allow_html=True)
+        if meta.get("stale"):
+            fetched = meta.get("fetched_at")
+            when = ""
+            if fetched:
+                mins = int((time.time() - fetched) // 60)
+                when = f" ({mins} min old)" if mins else ""
+            st.caption(f"⚠ rate-limited — showing cached data{when}")
         quota_row("5 h", float(five_hour.get("utilization") or 0), five_hour.get("resets_at"))
         quota_row("7 d", float(seven_day.get("utilization") or 0), seven_day.get("resets_at"))
         if extra.get("is_enabled"):
@@ -158,8 +165,9 @@ try:
 
 except RateLimitedError as e:
     st.warning(f"Claude rate-limited.{f' Retry in {e.retry_after}s.' if e.retry_after else ''}")
-except TokenExpiredError as e:
-    st.error(str(e))
+except TokenExpiredError:
+    st.warning("Claude token expired — please reconnect.")
+    _render_claude_login()
 except CredentialsNotFoundError as e:
     if str(e) == "not_authenticated":
         _render_claude_login()
