@@ -85,7 +85,12 @@ def get_usage() -> dict:
     if tokens.get("expires_at", 0) < time.time() + 300:
         if not tokens.get("refresh_token"):
             raise CredentialsNotFoundError("not_authenticated")
-        tokens = claude_auth.refresh_tokens(tokens)
+        try:
+            tokens = claude_auth.refresh_tokens(tokens)
+        except requests.HTTPError:
+            # Refresh token revoked/rotated/expired (invalid_grant) — the stored
+            # credentials are useless, so surface as a reconnect prompt.
+            raise TokenExpiredError("token_expired")
 
     def _request(tok: dict) -> requests.Response:
         return requests.get(
