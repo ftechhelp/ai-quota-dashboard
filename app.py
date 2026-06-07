@@ -86,6 +86,12 @@ def credits_row(label: str, used: float, limit: float):
     c3.markdown(f"<small>${used:,.2f} / ${limit:,.2f}</small>", unsafe_allow_html=True)
 
 
+def info_row(label: str, value: str):
+    c1, c2 = st.columns([1, 7])
+    c1.markdown(f"<small><b>{label}</b></small>", unsafe_allow_html=True)
+    c2.markdown(f"<small>{value}</small>", unsafe_allow_html=True)
+
+
 
 # ── Header ────────────────────────────────────────────────────────────────────
 
@@ -231,6 +237,7 @@ try:
     fh    = cdata.get("five_hour", {})
     sd    = cdata.get("seven_day", {})
     cr    = cdata.get("code_review", {})
+    cred  = cdata.get("credits", {})
 
     with st.container(border=True):
         st.markdown(f"**ChatGPT** &nbsp; `{plan}`", unsafe_allow_html=True)
@@ -239,6 +246,21 @@ try:
         quota_row("7 d", float(sd.get("utilization") or 0), sd.get("reset_at"))
         if cr.get("utilization") is not None:
             quota_row("code review", float(cr.get("utilization") or 0), cr.get("reset_at"))
+
+        if cred:
+            if cred.get("unlimited"):
+                info_row("credits", "unlimited")
+            else:
+                try:
+                    bal = float(cred.get("balance") or 0)
+                except (TypeError, ValueError):
+                    bal = 0.0
+                value = f"${bal:,.2f}"
+                loc = cred.get("local_messages") or [0, 0]
+                cld = cred.get("cloud_messages") or [0, 0]
+                if loc[1] or cld[1]:
+                    value += f" &nbsp;<span style='color:grey'>~{loc[1]} local / {cld[1]} cloud msgs</span>"
+                info_row("credits", value)
 
     with st.expander("Raw · ChatGPT"):
         st.json(raw)

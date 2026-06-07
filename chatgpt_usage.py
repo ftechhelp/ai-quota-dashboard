@@ -85,12 +85,20 @@ def get_usage() -> dict:
     pw  = rl.get("primary_window") or {}
     sw  = rl.get("secondary_window") or {}
     cr  = (raw.get("code_review_rate_limit") or {}).get("primary_window") or {}
+    cd  = raw.get("credits") or {}
 
     return {
         "plan_type":     raw.get("plan_type", ""),
         "five_hour":     {"utilization": pw.get("used_percent"), "reset_at": pw.get("reset_at")},
         "seven_day":     {"utilization": sw.get("used_percent"), "reset_at": sw.get("reset_at")},
         "code_review":   {"utilization": cr.get("used_percent"), "reset_at": cr.get("reset_at")},
+        "credits": {
+            "has_credits":    cd.get("has_credits", False),
+            "unlimited":      cd.get("unlimited", False),
+            "balance":        cd.get("balance", "0"),
+            "local_messages": cd.get("approx_local_messages") or [0, 0],
+            "cloud_messages": cd.get("approx_cloud_messages") or [0, 0],
+        },
         "limit_reached": not rl.get("allowed", True),
         "_raw": raw,
     }
