@@ -6,7 +6,7 @@ import streamlit as st
 import chatgpt_auth
 import chatgpt_usage as cgpt
 import claude_auth
-import opencode_go as ocgo
+import zai_usage as zai
 from claude_usage import CredentialsNotFoundError, RateLimitedError, TokenExpiredError, get_usage
 
 st.set_page_config(page_title="AI Quota Dashboard", page_icon="📊", layout="wide")
@@ -32,8 +32,8 @@ def fetch_chatgpt():
     return cgpt.get_usage()
 
 @st.cache_data(ttl=300)
-def fetch_opencode_go():
-    return ocgo.get_usage()
+def fetch_zai():
+    return zai.get_usage()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -271,46 +271,50 @@ except Exception as e:
     st.error(f"ChatGPT: {e}")
     st.exception(e)
 
-# ── OpenCode Go ───────────────────────────────────────────────────────────────
+# ── Z.ai ──────────────────────────────────────────────────────────────────────
 
 try:
-    odata = fetch_opencode_go()
-    limits = odata.get("limits", {})
-
-    WINDOWS = [
-        ("5 h", "five_hour"),
-        ("7 d", "weekly"),
-        ("30 d", "monthly"),
-    ]
+    zdata = fetch_zai()
+    level = zdata.get("level")
 
     with st.container(border=True):
         header_col, link_col = st.columns([5, 1])
-        header_col.markdown("**OpenCode Go** &nbsp; `subscription`", unsafe_allow_html=True)
+        badge = f"`{level}`" if level else "`coding plan`"
+        header_col.markdown(f"**Z.ai** &nbsp; {badge}", unsafe_allow_html=True)
         link_col.markdown(
             "<small>"
-            "<a href='https://opencode.ai/auth' target='_blank'>console →</a>"
+            "<a href='https://z.ai/model-api' target='_blank'>console →</a>"
             "</small>",
             unsafe_allow_html=True,
         )
-        for label, key in WINDOWS:
-            window = odata.get(key) or {}
-            limit = limits.get(key)
-            row_label = f"{label}<br><small style='color:grey'>${limit:,.0f}</small>" if limit else label
-            quota_row(row_label, float(window.get("utilization") or 0), window.get("resets_at"))
+        for label, key in [("5 h", "five_hour"), ("7 d", "weekly")]:
+            window = zdata.get(key)
+            if window:
+                pct = float(window.get("utilization") or 0)
+                quota_row(label, pct, window.get("resets_at"))
+        mcp = zdata.get("mcp_monthly")
+        if mcp:
+            row_label = "MCP 30 d"
+            cur, tot = mcp.get("current"), mcp.get("total")
+            if cur is not None and tot:
+                row_label += (
+                    f"<br><small style='color:grey'>{cur:,.0f} / {tot:,.0f}</small>"
+                )
+            quota_row(row_label, float(mcp.get("utilization") or 0))
 
-    with st.expander("Raw · OpenCode Go"):
-        st.json(odata)
+    with st.expander("Raw · Z.ai"):
+        st.json(zdata)
 
-except ocgo.OpenCodeGoKeyMissingError:
+except zai.ZaiKeyMissingError:
     with st.container(border=True):
-        st.markdown("**OpenCode Go**", unsafe_allow_html=True)
-        st.caption("Add `OPENCODE_GO_WORKSPACE_ID` and `OPENCODE_GO_AUTH_COOKIE` to `.env` to enable this card.")
-except ocgo.OpenCodeGoAuthError as e:
+        st.markdown("**Z.ai**", unsafe_allow_html=True)
+        st.caption("Add `ZAI_API_KEY` to `.env` to enable this card.")
+except zai.ZaiAuthError as e:
     with st.container(border=True):
-        st.markdown("**OpenCode Go**", unsafe_allow_html=True)
+        st.markdown("**Z.ai**", unsafe_allow_html=True)
         st.error(str(e))
 except Exception as e:
-    st.error(f"OpenCode Go: {e}")
+    st.error(f"Z.ai: {e}")
     st.exception(e)
 
 

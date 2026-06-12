@@ -25,7 +25,7 @@ App listens on port `8501` inside the `private` external Docker network (no host
 | `app.py` | Streamlit UI — layout, caching (`ttl=300s`), error handling |
 | `claude_usage.py` | Reads `~/.claude/.credentials.json`, calls `https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` header |
 | `openai_usage.py` | Reads `OPENAI_API_KEY` env var, probes `/v1/models` for rate limit headers, fetches `/v1/organization/usage/completions` and `/v1/organization/costs` |
-| `opencode_go.py` | Scrapes the authenticated OpenCode Go workspace console (`https://opencode.ai/workspace/<id>/go`) for rolling/weekly/monthly usage |
+| `zai_usage.py` | Reads `ZAI_API_KEY` env var, calls `https://api.z.ai/api/monitor/usage/quota/limit` (key passed directly in `Authorization`, no `Bearer`) for 5-hour/weekly token windows and monthly MCP usage |
 
 ### API response shape (Claude)
 ```json
@@ -56,8 +56,7 @@ App listens on port `8501` inside the `private` external Docker network (no host
 |----------|----------|---------|
 | `OPENAI_API_KEY` | Optional | Project key (`sk-proj-...`) — used for RPM/TPM rate limit probe via `/v1/models` |
 | `OPENAI_ADMIN_KEY` | Optional | Admin key (`sk-admin-...`) — used for token usage and cost via `/v1/organization/*` |
-| `OPENCODE_GO_WORKSPACE_ID` | Optional | Workspace `<id>` from `https://opencode.ai/workspace/<id>/go` |
-| `OPENCODE_GO_AUTH_COOKIE` | Optional | Value of the `auth` cookie (starts with `Fe26.2**`) for the OpenCode Go console |
+| `ZAI_API_KEY` | Optional | Z.ai GLM Coding Plan API key from `https://z.ai/manage-apikey/apikey-list` |
 
 Either or both can be set. Missing keys = those sections are silently omitted from the card.
 
