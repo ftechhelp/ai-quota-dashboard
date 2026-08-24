@@ -57,29 +57,16 @@ The OpenAI card shows:
 
 If `OPENAI_API_KEY` is missing, the OpenAI card shows a config prompt and the Claude card still works normally.
 
-## Z.ai setup
-
-[Z.ai GLM Coding Plan](https://z.ai/subscribe) quota is fetched from the monitor API that Z.ai's own console uses (`/api/monitor/usage/quota/limit`).
-
-Add to `.env`:
-
-```
-ZAI_API_KEY=        # coding-plan API key from https://z.ai/manage-apikey/apikey-list
-```
-
-The card shows the rolling 5-hour token window, the weekly token window, and monthly MCP tool usage. If the key is missing, the card shows a config prompt.
-
 ## Project structure
 
 ```
 app.py              # Streamlit UI
 claude_usage.py     # Anthropic OAuth usage API client
 openai_usage.py     # OpenAI usage API client
-zai_usage.py        # Z.ai GLM Coding Plan quota API client
 Dockerfile
 docker-compose.yml
 pyproject.toml
-.env                # Not committed — holds OPENAI_API_KEY, ZAI_API_KEY etc.
+.env                # Not committed — holds OPENAI_API_KEY etc.
 ```
 
 ## Adding providers
