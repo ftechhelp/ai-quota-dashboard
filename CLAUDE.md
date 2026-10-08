@@ -24,6 +24,7 @@ App listens on port `8501` inside the `private` external Docker network (no host
 |------|---------|
 | `app.py` | Streamlit UI — layout, caching (`ttl=300s`), error handling |
 | `claude_usage.py` | Reads `~/.claude/.credentials.json`, calls `https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` header |
+| `openrouter_usage.py` | Key pasted in the UI → `/data/openrouter_key.json`. Month-to-date spend from `/api/v1/key` (regular key) or summed `/api/v1/keys` (management key); last-used model from `POST /api/v1/analytics/query`, falling back to `/api/v1/activity` (management key only) |
 | `openai_usage.py` | Reads `OPENAI_API_KEY` env var, probes `/v1/models` for rate limit headers, fetches `/v1/organization/usage/completions` and `/v1/organization/costs` |
 
 ### API response shape (Claude)

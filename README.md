@@ -57,12 +57,20 @@ The OpenAI card shows:
 
 If `OPENAI_API_KEY` is missing, the OpenAI card shows a config prompt and the Claude card still works normally.
 
+## OpenRouter setup
+
+On first load the OpenRouter card asks you to paste a key. It's checked against OpenRouter, then saved to `/data/openrouter_key.json` (in the `chatgpt_data` volume). Use **change key** on the card to replace it.
+
+- **Management key** ([settings → management keys](https://openrouter.ai/settings/management-keys)): spend this UTC month summed across all keys in the default workspace, plus the most recently used model.
+- **Regular API key**: spend this UTC month for that key only. OpenRouter only exposes model activity to management keys, so the last model isn't shown.
+
 ## Project structure
 
 ```
 app.py              # Streamlit UI
 claude_usage.py     # Anthropic OAuth usage API client
 openai_usage.py     # OpenAI usage API client
+openrouter_usage.py # OpenRouter spend + last-used model
 Dockerfile
 docker-compose.yml
 pyproject.toml

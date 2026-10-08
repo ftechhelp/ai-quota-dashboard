@@ -6,6 +6,7 @@ import streamlit as st
 import chatgpt_auth
 import chatgpt_usage as cgpt
 import claude_auth
+import openrouter_usage as orouter
 from claude_usage import CredentialsNotFoundError, RateLimitedError, TokenExpiredError, get_usage
 
 st.set_page_config(page_title="AI Quota Dashboard", page_icon="📊", layout="wide")
@@ -29,6 +30,10 @@ def fetch_claude():
 @st.cache_data(ttl=300)
 def fetch_chatgpt():
     return cgpt.get_usage()
+
+@st.cache_data(ttl=300)
+def fetch_openrouter():
+    return orouter.get_usage()
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -60,6 +65,25 @@ def format_reset_time(value) -> str:
             return local.strftime("%a %-H:%M %Z")
     except Exception:
         return str(value)
+
+
+def grey(text: str) -> str:
+    return f"<span style='color:grey'>{text}</span>"
+
+
+def format_last_used(value, precision: str) -> str:
+    if not value:
+        return ""
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return str(value)
+    if precision == "day":
+        return dt.strftime("%b %-d")
+    local = dt.astimezone()
+    if local.date() == datetime.now(local.tzinfo).date():
+        return local.strftime("today %-H:%M %Z")
+    return local.strftime("%b %-d %-H:%M %Z")
 
 
 def quota_row(label: str, pct: float, reset_value=None):
@@ -265,6 +289,87 @@ except (cgpt.ChatGPTNotAuthenticatedError, cgpt.ChatGPTAuthError):
 except Exception as e:
     st.error(f"ChatGPT: {e}")
     st.exception(e)
+
+# ── OpenRouter key entry ──────────────────────────────────────────────────────
+
+def _render_openrouter_setup(error: str | None = None, cancellable: bool = False):
+    with st.container(border=True):
+        st.markdown("**OpenRouter**", unsafe_allow_html=True)
+        if error:
+            st.caption(f"⚠ {error}")
+        st.markdown(
+            "<small>Paste a <a href='https://openrouter.ai/settings/management-keys' "
+            "target='_blank'>management key</a> for total spend + last model, "
+            "or a regular API key for that key's spend only:</small>",
+            unsafe_allow_html=True,
+        )
+        key_input = st.text_input(
+            "OpenRouter API key", key="openrouter_key_input", type="password",
+            label_visibility="collapsed", placeholder="sk-or-v1-…",
+        )
+        col_save, col_cancel, _ = st.columns([1, 1, 5])
+        if col_save.button("Save", key="openrouter_save") and key_input:
+            try:
+                orouter.validate_key(key_input)
+            except orouter.OpenRouterAuthError:
+                st.error("OpenRouter rejected that key.")
+            except Exception as ex:
+                st.error(f"Could not verify key: {ex}")
+            else:
+                orouter.save_key(key_input)
+                st.session_state.pop("openrouter_editing", None)
+                fetch_openrouter.clear()
+                st.rerun()
+        if cancellable and col_cancel.button("Cancel", key="openrouter_cancel"):
+            st.session_state.pop("openrouter_editing", None)
+            st.rerun()
+
+
+# ── OpenRouter ────────────────────────────────────────────────────────────────
+
+if st.session_state.get("openrouter_editing"):
+    _render_openrouter_setup(cancellable=True)
+else:
+    try:
+        odata = fetch_openrouter()
+
+        with st.container(border=True):
+            header_col, change_col = st.columns([7, 1])
+            badge = "`management key`" if odata.get("is_management") else "`api key`"
+            header_col.markdown(f"**OpenRouter** &nbsp; {badge}", unsafe_allow_html=True)
+            if change_col.button("change key", key="openrouter_change", type="tertiary"):
+                st.session_state.openrouter_editing = True
+                st.rerun()
+
+            notes = [f"{datetime.now(timezone.utc):%B} UTC"]
+            if odata.get("key_count", 1) > 1:
+                notes.append(f"{odata['key_count']} keys")
+            if odata.get("byok_month"):
+                notes.append(f"+${odata['byok_month']:,.2f} BYOK")
+            spend = odata.get("spend_month") or 0
+            info_row("spent", f"${spend:,.2f} &nbsp;{grey(' · '.join(notes))}")
+
+            last = odata.get("last_model")
+            if last:
+                when = format_last_used(last.get("at"), last.get("precision"))
+                info_row("last model", f"{last['model']} &nbsp;{grey(when)}")
+            elif not odata.get("is_management"):
+                info_row("last model", grey("needs a management key"))
+            elif odata.get("last_model_error"):
+                info_row("last model", grey(f"unavailable — {odata['last_model_error']}"))
+            else:
+                info_row("last model", grey("no requests in the last 30 days"))
+
+        with st.expander("Raw · OpenRouter"):
+            st.json(odata.get("_raw", {}))
+
+    except orouter.OpenRouterKeyMissingError:
+        _render_openrouter_setup()
+    except orouter.OpenRouterAuthError as e:
+        _render_openrouter_setup(error=f"{e} — paste a new one.")
+    except Exception as e:
+        st.error(f"OpenRouter: {e}")
+        st.exception(e)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 
