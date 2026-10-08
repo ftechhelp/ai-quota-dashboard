@@ -274,11 +274,14 @@ try:
                     bal = float(cred.get("balance") or 0)
                 except (TypeError, ValueError):
                     bal = 0.0
-                value = f"${bal:,.2f}"
+                # Balance is Codex credits, not USD; message counts are [min, max] estimates
+                value = f"{bal:,.0f} credits"
                 loc = cred.get("local_messages") or [0, 0]
                 cld = cred.get("cloud_messages") or [0, 0]
                 if loc[1] or cld[1]:
-                    value += f" &nbsp;<span style='color:grey'>~{loc[1]} local / {cld[1]} cloud msgs</span>"
+                    value += " &nbsp;" + grey(
+                        f"~{loc[0]}–{loc[1]} local / {cld[0]}–{cld[1]} cloud msgs"
+                    )
                 info_row("credits", value)
 
     with st.expander("Raw · ChatGPT"):
