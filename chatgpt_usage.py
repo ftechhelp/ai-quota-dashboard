@@ -63,6 +63,14 @@ def _get_access_token() -> tuple[str, str | None]:
     return tokens["access_token"], tokens.get("account_id")
 
 
+def _window(w: dict) -> dict:
+    return {
+        "utilization": w.get("used_percent"),
+        "reset_at":    w.get("reset_at"),
+        "window_s":    w.get("limit_window_seconds"),
+    }
+
+
 def get_usage() -> dict:
     access_token, account_id = _get_access_token()
 
@@ -89,9 +97,9 @@ def get_usage() -> dict:
 
     return {
         "plan_type":     raw.get("plan_type", ""),
-        "five_hour":     {"utilization": pw.get("used_percent"), "reset_at": pw.get("reset_at")},
-        "seven_day":     {"utilization": sw.get("used_percent"), "reset_at": sw.get("reset_at")},
-        "code_review":   {"utilization": cr.get("used_percent"), "reset_at": cr.get("reset_at")},
+        "five_hour":     _window(pw),
+        "seven_day":     _window(sw),
+        "code_review":   _window(cr),
         "credits": {
             "has_credits":    cd.get("has_credits", False),
             "unlimited":      cd.get("unlimited", False),

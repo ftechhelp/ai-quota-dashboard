@@ -57,6 +57,12 @@ The OpenAI card shows:
 
 If `OPENAI_API_KEY` is missing, the OpenAI card shows a config prompt and the Claude card still works normally.
 
+## Pace and history
+
+Each quota bar has a tick showing how much of the window has passed. A bar ahead of its tick is burning faster than the window allows: it turns amber and shows when it will run out at the current rate. It turns red once the limit is hit.
+
+A background collector (started with the app) records every provider's numbers about every 10 minutes to `/data/history.db`, even when the dashboard isn't open. Each card's **History** section charts the last 7 days (OpenRouter: month-to-date spend). History is kept for 90 days.
+
 ## OpenRouter setup
 
 On first load the OpenRouter card asks you to paste a key. It's checked against OpenRouter, then saved to `/data/openrouter_key.json` (in the `chatgpt_data` volume). Use **change key** on the card to replace it.
@@ -71,6 +77,8 @@ app.py              # Streamlit UI
 claude_usage.py     # Anthropic OAuth usage API client
 openai_usage.py     # OpenAI usage API client
 openrouter_usage.py # OpenRouter spend + last-used model
+history.py          # SQLite usage history
+collector.py        # Background history sampler
 Dockerfile
 docker-compose.yml
 pyproject.toml
