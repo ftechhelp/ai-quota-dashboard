@@ -1,6 +1,16 @@
 services:
   dashboard:
     build: .
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; response = urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4); assert response.status == 200"
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     env_file:
       - path: .env
         required: false
