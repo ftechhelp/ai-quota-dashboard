@@ -10,11 +10,12 @@ services:
       - chatgpt_data:/data
     networks:
       - private
-    restart: unless-stopped
-
+    restart: no
+    container_name: ai-quota-dashboard-dev
 volumes:
   chatgpt_data:
-
 networks:
   private:
     external: true
+    name: private
+name: ai-quota-dashboard-dev
