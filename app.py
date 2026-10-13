@@ -26,15 +26,17 @@ st.markdown("""
 
 # ── Cached fetchers ───────────────────────────────────────────────────────────
 
-@st.cache_data(ttl=300)
+REFRESH_INTERVAL_S = 10
+
+@st.cache_data(ttl=REFRESH_INTERVAL_S)
 def fetch_claude():
     return collector.fetch("claude")
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=REFRESH_INTERVAL_S)
 def fetch_chatgpt():
     return collector.fetch("chatgpt")
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=REFRESH_INTERVAL_S)
 def fetch_openrouter():
     return collector.fetch("openrouter")
 
@@ -257,286 +259,291 @@ def info_row(label: str, value: str):
 
 
 
-# ── Header ────────────────────────────────────────────────────────────────────
+@st.fragment(run_every=REFRESH_INTERVAL_S)
+def render_dashboard():
+    # ── Header ────────────────────────────────────────────────────────────────────
 
-_, refresh_col = st.columns([9, 1])
-with refresh_col:
-    if st.button("↻ Refresh", use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
-
-# ── Claude login flow ─────────────────────────────────────────────────────────
-
-def _render_claude_login():
-    with st.container(border=True):
-        st.markdown("**Claude**", unsafe_allow_html=True)
-
-        pending = st.session_state.get("claude_pending")
-
-        if pending is None:
-            if st.button("Connect Claude", key="claude_connect"):
-                auth_url = claude_auth.start_pkce_auth()
-                st.session_state.claude_pending = {"auth_url": auth_url}
-                st.rerun()
-        else:
-            auth_url = pending["auth_url"]
-            st.markdown(
-                f"**1.** [Click here to authorize Claude]({auth_url})  \n"
-                "**2.** Sign in, then paste the code shown on the page:",
-                unsafe_allow_html=True,
-            )
-            code_input = st.text_input("Authorization code", key="claude_code_input", label_visibility="collapsed", placeholder="Paste code here…")
-            col_ok, col_cancel, _ = st.columns([1, 1, 5])
-            if col_ok.button("Connect", key="claude_code_submit") and code_input:
-                try:
-                    tokens = claude_auth.exchange_code(code_input)
-                    claude_auth.save_tokens(tokens)
-                    del st.session_state.claude_pending
-                    st.cache_data.clear()
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"Failed to exchange code: {ex}")
-            if col_cancel.button("Cancel", key="claude_cancel"):
-                del st.session_state.claude_pending
-                st.rerun()
-
-
-# ── Claude ────────────────────────────────────────────────────────────────────
-
-try:
-    data = fetch_claude()
-    meta = data.get("_meta", {})
-    sub_type = meta.get("subscriptionType", "")
-    five_hour = data.get("five_hour") or {}
-    seven_day = data.get("seven_day") or {}
-    extra = data.get("extra_usage") or {}
-
-    with st.container(border=True):
-        badge = f"`{sub_type}`" if sub_type else ""
-        st.markdown(f"**Claude** &nbsp; {badge}", unsafe_allow_html=True)
-        if meta.get("stale"):
-            fetched = meta.get("fetched_at")
-            when = ""
-            if fetched:
-                mins = int((time.time() - fetched) // 60)
-                when = f" ({mins} min old)" if mins else ""
-            st.caption(f"⚠ rate-limited — showing cached data{when}")
-        quota_row("5 h", float(five_hour.get("utilization") or 0), five_hour.get("resets_at"),
-                  CLAUDE_5H_S)
-        quota_row("7 d", float(seven_day.get("utilization") or 0), seven_day.get("resets_at"),
-                  CLAUDE_7D_S)
-        if extra.get("is_enabled"):
-            credits_row(
-                "credits",
-                (extra.get("used_credits") or 0) / 100,
-                (extra.get("monthly_limit") or 0) / 100,
-            )
-        with st.expander(f"History · {HISTORY_DAYS} days"):
-            history_chart("claude", {"5h": "5 h", "7d": "7 d"}, time.time() - HISTORY_DAYS * 86400)
-
-    with st.expander("Raw · Claude"):
-        st.json({k: v for k, v in data.items() if k != "_meta"})
-
-except RateLimitedError as e:
-    st.warning(f"Claude rate-limited.{f' Retry in {e.retry_after}s.' if e.retry_after else ''}")
-except TokenExpiredError:
-    st.warning("Claude token expired — please reconnect.")
-    _render_claude_login()
-except CredentialsNotFoundError as e:
-    if str(e) == "not_authenticated":
-        _render_claude_login()
-    else:
-        st.error(str(e))
-except Exception as e:
-    st.error(f"Claude: {e}")
-    st.exception(e)
-
-
-# ── ChatGPT login flow ────────────────────────────────────────────────────────
-
-def _render_chatgpt_login():
-    with st.container(border=True):
-        st.markdown("**ChatGPT** &nbsp; `plus`", unsafe_allow_html=True)
-
-        pending = st.session_state.get("chatgpt_pending")
-
-        if pending is None:
-            if st.button("Connect ChatGPT", key="chatgpt_connect"):
-                with st.spinner("Requesting device code…"):
-                    st.session_state.chatgpt_pending = chatgpt_auth.start_device_auth()
-                st.rerun()
-        else:
-            st.markdown(
-                f"**1.** Visit &nbsp; `https://auth.openai.com/codex/device`  \n"
-                f"**2.** Enter code:",
-                unsafe_allow_html=True,
-            )
-            st.code(pending["user_code"], language=None)
-
-            col_cancel, _ = st.columns([1, 4])
-            if col_cancel.button("Cancel", key="chatgpt_cancel"):
-                del st.session_state.chatgpt_pending
-                st.rerun()
-
-            # Poll once then rerun automatically
-            with st.spinner("Waiting for authorization…"):
-                result = chatgpt_auth.poll_device_auth(pending["device_id"], pending["user_code"])
-
-            if result:
-                tokens = chatgpt_auth.exchange_code(
-                    result["authorization_code"], result["code_verifier"]
-                )
-                chatgpt_auth.save_tokens(tokens)
-                del st.session_state.chatgpt_pending
-                st.cache_data.clear()
-                st.rerun()
-            else:
-                time.sleep(pending["interval"])
-                st.rerun()
-
-
-# ── ChatGPT ───────────────────────────────────────────────────────────────────
-
-try:
-    cdata = fetch_chatgpt()
-    raw   = cdata.get("_raw", cdata)
-
-    plan  = cdata.get("plan_type", "plus")
-    fh    = cdata.get("five_hour", {})
-    sd    = cdata.get("seven_day", {})
-    cr    = cdata.get("code_review", {})
-    cred  = cdata.get("credits", {})
-
-    with st.container(border=True):
-        st.markdown(f"**ChatGPT** &nbsp; `{plan}`", unsafe_allow_html=True)
-
-        quota_row("5 h", float(fh.get("utilization") or 0), fh.get("reset_at"), fh.get("window_s"))
-        quota_row("7 d", float(sd.get("utilization") or 0), sd.get("reset_at"), sd.get("window_s"))
-        if cr.get("utilization") is not None:
-            quota_row("code review", float(cr.get("utilization") or 0), cr.get("reset_at"),
-                      cr.get("window_s"))
-
-        if cred:
-            if cred.get("unlimited"):
-                info_row("credits", "unlimited")
-            else:
-                try:
-                    bal = float(cred.get("balance") or 0)
-                except (TypeError, ValueError):
-                    bal = 0.0
-                # Balance is Codex credits, not USD; message counts are [min, max] estimates
-                value = f"{bal:,.0f} credits"
-                loc = cred.get("local_messages") or [0, 0]
-                cld = cred.get("cloud_messages") or [0, 0]
-                if loc[1] or cld[1]:
-                    value += " &nbsp;" + grey(
-                        f"~{loc[0]}–{loc[1]} local / {cld[0]}–{cld[1]} cloud msgs"
-                    )
-                info_row("credits", value)
-
-        with st.expander(f"History · {HISTORY_DAYS} days"):
-            history_chart(
-                "chatgpt", {"5h": "5 h", "7d": "7 d", "code_review": "code review"},
-                time.time() - HISTORY_DAYS * 86400,
-            )
-
-    with st.expander("Raw · ChatGPT"):
-        st.json(raw)
-
-except (cgpt.ChatGPTNotAuthenticatedError, cgpt.ChatGPTAuthError):
-    _render_chatgpt_login()
-except Exception as e:
-    st.error(f"ChatGPT: {e}")
-    st.exception(e)
-
-# ── OpenRouter key entry ──────────────────────────────────────────────────────
-
-def _render_openrouter_setup(error: str | None = None, cancellable: bool = False):
-    with st.container(border=True):
-        st.markdown("**OpenRouter**", unsafe_allow_html=True)
-        if error:
-            st.caption(f"⚠ {error}")
-        st.markdown(
-            "<small>Paste a <a href='https://openrouter.ai/settings/management-keys' "
-            "target='_blank'>management key</a> for total spend + last model, "
-            "or a regular API key for that key's spend only:</small>",
-            unsafe_allow_html=True,
-        )
-        key_input = st.text_input(
-            "OpenRouter API key", key="openrouter_key_input", type="password",
-            label_visibility="collapsed", placeholder="sk-or-v1-…",
-        )
-        col_save, col_cancel, _ = st.columns([1, 1, 5])
-        if col_save.button("Save", key="openrouter_save") and key_input:
-            try:
-                orouter.validate_key(key_input)
-            except orouter.OpenRouterAuthError:
-                st.error("OpenRouter rejected that key.")
-            except Exception as ex:
-                st.error(f"Could not verify key: {ex}")
-            else:
-                orouter.save_key(key_input)
-                st.session_state.pop("openrouter_editing", None)
-                fetch_openrouter.clear()
-                st.rerun()
-        if cancellable and col_cancel.button("Cancel", key="openrouter_cancel"):
-            st.session_state.pop("openrouter_editing", None)
+    _, refresh_col = st.columns([9, 1])
+    with refresh_col:
+        if st.button("↻ Refresh", use_container_width=True):
+            st.cache_data.clear()
             st.rerun()
 
+    # ── Claude login flow ─────────────────────────────────────────────────────────
 
-# ── OpenRouter ────────────────────────────────────────────────────────────────
+    def _render_claude_login():
+        with st.container(border=True):
+            st.markdown("**Claude**", unsafe_allow_html=True)
 
-if st.session_state.get("openrouter_editing"):
-    _render_openrouter_setup(cancellable=True)
-else:
+            pending = st.session_state.get("claude_pending")
+
+            if pending is None:
+                if st.button("Connect Claude", key="claude_connect"):
+                    auth_url = claude_auth.start_pkce_auth()
+                    st.session_state.claude_pending = {"auth_url": auth_url}
+                    st.rerun()
+            else:
+                auth_url = pending["auth_url"]
+                st.markdown(
+                    f"**1.** [Click here to authorize Claude]({auth_url})  \n"
+                    "**2.** Sign in, then paste the code shown on the page:",
+                    unsafe_allow_html=True,
+                )
+                code_input = st.text_input("Authorization code", key="claude_code_input", label_visibility="collapsed", placeholder="Paste code here…")
+                col_ok, col_cancel, _ = st.columns([1, 1, 5])
+                if col_ok.button("Connect", key="claude_code_submit") and code_input:
+                    try:
+                        tokens = claude_auth.exchange_code(code_input)
+                        claude_auth.save_tokens(tokens)
+                        del st.session_state.claude_pending
+                        st.cache_data.clear()
+                        st.rerun()
+                    except Exception as ex:
+                        st.error(f"Failed to exchange code: {ex}")
+                if col_cancel.button("Cancel", key="claude_cancel"):
+                    del st.session_state.claude_pending
+                    st.rerun()
+
+
+    # ── Claude ────────────────────────────────────────────────────────────────────
+
     try:
-        odata = fetch_openrouter()
+        data = fetch_claude()
+        meta = data.get("_meta", {})
+        sub_type = meta.get("subscriptionType", "")
+        five_hour = data.get("five_hour") or {}
+        seven_day = data.get("seven_day") or {}
+        extra = data.get("extra_usage") or {}
 
         with st.container(border=True):
-            header_col, change_col = st.columns([7, 1])
-            badge = "`management key`" if odata.get("is_management") else "`api key`"
-            header_col.markdown(f"**OpenRouter** &nbsp; {badge}", unsafe_allow_html=True)
-            if change_col.button("change key", key="openrouter_change", type="tertiary"):
-                st.session_state.openrouter_editing = True
-                st.rerun()
+            badge = f"`{sub_type}`" if sub_type else ""
+            st.markdown(f"**Claude** &nbsp; {badge}", unsafe_allow_html=True)
+            if meta.get("stale"):
+                fetched = meta.get("fetched_at")
+                when = ""
+                if fetched:
+                    mins = int((time.time() - fetched) // 60)
+                    when = f" ({mins} min old)" if mins else ""
+                st.caption(f"⚠ rate-limited — showing cached data{when}")
+            quota_row("5 h", float(five_hour.get("utilization") or 0), five_hour.get("resets_at"),
+                      CLAUDE_5H_S)
+            quota_row("7 d", float(seven_day.get("utilization") or 0), seven_day.get("resets_at"),
+                      CLAUDE_7D_S)
+            if extra.get("is_enabled"):
+                credits_row(
+                    "credits",
+                    (extra.get("used_credits") or 0) / 100,
+                    (extra.get("monthly_limit") or 0) / 100,
+                )
+            with st.expander(f"History · {HISTORY_DAYS} days"):
+                history_chart("claude", {"5h": "5 h", "7d": "7 d"}, time.time() - HISTORY_DAYS * 86400)
 
-            notes = [f"{datetime.now(timezone.utc):%B} UTC"]
-            if odata.get("key_count", 1) > 1:
-                notes.append(f"{odata['key_count']} keys")
-            if odata.get("byok_month"):
-                notes.append(f"+\\${odata['byok_month']:,.2f} BYOK")
-            spend = odata.get("spend_month") or 0
-            info_row("spent", f"\\${spend:,.2f} &nbsp;{grey(' · '.join(notes))}")
+        with st.expander("Raw · Claude"):
+            st.json({k: v for k, v in data.items() if k != "_meta"})
 
-            last = odata.get("last_model")
-            if last:
-                when = format_last_used(last.get("at"), last.get("precision"))
-                info_row("last model", f"{last['model']} &nbsp;{grey(when)}")
-            elif not odata.get("is_management"):
-                info_row("last model", grey("needs a management key"))
-            elif odata.get("last_model_error"):
-                info_row("last model", grey(f"unavailable — {odata['last_model_error']}"))
-            else:
-                info_row("last model", grey("no requests in the last 30 days"))
-
-            month_start = datetime.now(timezone.utc).replace(
-                day=1, hour=0, minute=0, second=0, microsecond=0
-            )
-            with st.expander("History · this month"):
-                history_chart("openrouter", {"spend_month": "spent"}, month_start.timestamp(),
-                              unit="$", x_format="%b %-d")
-
-        with st.expander("Raw · OpenRouter"):
-            st.json(odata.get("_raw", {}))
-
-    except orouter.OpenRouterKeyMissingError:
-        _render_openrouter_setup()
-    except orouter.OpenRouterAuthError as e:
-        _render_openrouter_setup(error=f"{e} — paste a new one.")
+    except RateLimitedError as e:
+        st.warning(f"Claude rate-limited.{f' Retry in {e.retry_after}s.' if e.retry_after else ''}")
+    except TokenExpiredError:
+        st.warning("Claude token expired — please reconnect.")
+        _render_claude_login()
+    except CredentialsNotFoundError as e:
+        if str(e) == "not_authenticated":
+            _render_claude_login()
+        else:
+            st.error(str(e))
     except Exception as e:
-        st.error(f"OpenRouter: {e}")
+        st.error(f"Claude: {e}")
         st.exception(e)
 
-# ── Footer ────────────────────────────────────────────────────────────────────
 
-st.caption(f"Updated {datetime.now().strftime('%H:%M:%S')}")
+    # ── ChatGPT login flow ────────────────────────────────────────────────────────
+
+    def _render_chatgpt_login():
+        with st.container(border=True):
+            st.markdown("**ChatGPT** &nbsp; `plus`", unsafe_allow_html=True)
+
+            pending = st.session_state.get("chatgpt_pending")
+
+            if pending is None:
+                if st.button("Connect ChatGPT", key="chatgpt_connect"):
+                    with st.spinner("Requesting device code…"):
+                        st.session_state.chatgpt_pending = chatgpt_auth.start_device_auth()
+                    st.rerun()
+            else:
+                st.markdown(
+                    f"**1.** Visit &nbsp; `https://auth.openai.com/codex/device`  \n"
+                    f"**2.** Enter code:",
+                    unsafe_allow_html=True,
+                )
+                st.code(pending["user_code"], language=None)
+
+                col_cancel, _ = st.columns([1, 4])
+                if col_cancel.button("Cancel", key="chatgpt_cancel"):
+                    del st.session_state.chatgpt_pending
+                    st.rerun()
+
+                # Poll once then rerun automatically
+                with st.spinner("Waiting for authorization…"):
+                    result = chatgpt_auth.poll_device_auth(pending["device_id"], pending["user_code"])
+
+                if result:
+                    tokens = chatgpt_auth.exchange_code(
+                        result["authorization_code"], result["code_verifier"]
+                    )
+                    chatgpt_auth.save_tokens(tokens)
+                    del st.session_state.chatgpt_pending
+                    st.cache_data.clear()
+                    st.rerun()
+                else:
+                    time.sleep(pending["interval"])
+                    st.rerun()
+
+
+    # ── ChatGPT ───────────────────────────────────────────────────────────────────
+
+    try:
+        cdata = fetch_chatgpt()
+        raw   = cdata.get("_raw", cdata)
+
+        plan  = cdata.get("plan_type", "plus")
+        fh    = cdata.get("five_hour", {})
+        sd    = cdata.get("seven_day", {})
+        cr    = cdata.get("code_review", {})
+        cred  = cdata.get("credits", {})
+
+        with st.container(border=True):
+            st.markdown(f"**ChatGPT** &nbsp; `{plan}`", unsafe_allow_html=True)
+
+            quota_row("5 h", float(fh.get("utilization") or 0), fh.get("reset_at"), fh.get("window_s"))
+            quota_row("7 d", float(sd.get("utilization") or 0), sd.get("reset_at"), sd.get("window_s"))
+            if cr.get("utilization") is not None:
+                quota_row("code review", float(cr.get("utilization") or 0), cr.get("reset_at"),
+                          cr.get("window_s"))
+
+            if cred:
+                if cred.get("unlimited"):
+                    info_row("credits", "unlimited")
+                else:
+                    try:
+                        bal = float(cred.get("balance") or 0)
+                    except (TypeError, ValueError):
+                        bal = 0.0
+                    # Balance is Codex credits, not USD; message counts are [min, max] estimates
+                    value = f"{bal:,.0f} credits"
+                    loc = cred.get("local_messages") or [0, 0]
+                    cld = cred.get("cloud_messages") or [0, 0]
+                    if loc[1] or cld[1]:
+                        value += " &nbsp;" + grey(
+                            f"~{loc[0]}–{loc[1]} local / {cld[0]}–{cld[1]} cloud msgs"
+                        )
+                    info_row("credits", value)
+
+            with st.expander(f"History · {HISTORY_DAYS} days"):
+                history_chart(
+                    "chatgpt", {"5h": "5 h", "7d": "7 d", "code_review": "code review"},
+                    time.time() - HISTORY_DAYS * 86400,
+                )
+
+        with st.expander("Raw · ChatGPT"):
+            st.json(raw)
+
+    except (cgpt.ChatGPTNotAuthenticatedError, cgpt.ChatGPTAuthError):
+        _render_chatgpt_login()
+    except Exception as e:
+        st.error(f"ChatGPT: {e}")
+        st.exception(e)
+
+    # ── OpenRouter key entry ──────────────────────────────────────────────────────
+
+    def _render_openrouter_setup(error: str | None = None, cancellable: bool = False):
+        with st.container(border=True):
+            st.markdown("**OpenRouter**", unsafe_allow_html=True)
+            if error:
+                st.caption(f"⚠ {error}")
+            st.markdown(
+                "<small>Paste a <a href='https://openrouter.ai/settings/management-keys' "
+                "target='_blank'>management key</a> for total spend + last model, "
+                "or a regular API key for that key's spend only:</small>",
+                unsafe_allow_html=True,
+            )
+            key_input = st.text_input(
+                "OpenRouter API key", key="openrouter_key_input", type="password",
+                label_visibility="collapsed", placeholder="sk-or-v1-…",
+            )
+            col_save, col_cancel, _ = st.columns([1, 1, 5])
+            if col_save.button("Save", key="openrouter_save") and key_input:
+                try:
+                    orouter.validate_key(key_input)
+                except orouter.OpenRouterAuthError:
+                    st.error("OpenRouter rejected that key.")
+                except Exception as ex:
+                    st.error(f"Could not verify key: {ex}")
+                else:
+                    orouter.save_key(key_input)
+                    st.session_state.pop("openrouter_editing", None)
+                    fetch_openrouter.clear()
+                    st.rerun()
+            if cancellable and col_cancel.button("Cancel", key="openrouter_cancel"):
+                st.session_state.pop("openrouter_editing", None)
+                st.rerun()
+
+
+    # ── OpenRouter ────────────────────────────────────────────────────────────────
+
+    if st.session_state.get("openrouter_editing"):
+        _render_openrouter_setup(cancellable=True)
+    else:
+        try:
+            odata = fetch_openrouter()
+
+            with st.container(border=True):
+                header_col, change_col = st.columns([7, 1])
+                badge = "`management key`" if odata.get("is_management") else "`api key`"
+                header_col.markdown(f"**OpenRouter** &nbsp; {badge}", unsafe_allow_html=True)
+                if change_col.button("change key", key="openrouter_change", type="tertiary"):
+                    st.session_state.openrouter_editing = True
+                    st.rerun()
+
+                notes = [f"{datetime.now(timezone.utc):%B} UTC"]
+                if odata.get("key_count", 1) > 1:
+                    notes.append(f"{odata['key_count']} keys")
+                if odata.get("byok_month"):
+                    notes.append(f"+\\${odata['byok_month']:,.2f} BYOK")
+                spend = odata.get("spend_month") or 0
+                info_row("spent", f"\\${spend:,.2f} &nbsp;{grey(' · '.join(notes))}")
+
+                last = odata.get("last_model")
+                if last:
+                    when = format_last_used(last.get("at"), last.get("precision"))
+                    info_row("last model", f"{last['model']} &nbsp;{grey(when)}")
+                elif not odata.get("is_management"):
+                    info_row("last model", grey("needs a management key"))
+                elif odata.get("last_model_error"):
+                    info_row("last model", grey(f"unavailable — {odata['last_model_error']}"))
+                else:
+                    info_row("last model", grey("no requests in the last 30 days"))
+
+                month_start = datetime.now(timezone.utc).replace(
+                    day=1, hour=0, minute=0, second=0, microsecond=0
+                )
+                with st.expander("History · this month"):
+                    history_chart("openrouter", {"spend_month": "spent"}, month_start.timestamp(),
+                                  unit="$", x_format="%b %-d")
+
+            with st.expander("Raw · OpenRouter"):
+                st.json(odata.get("_raw", {}))
+
+        except orouter.OpenRouterKeyMissingError:
+            _render_openrouter_setup()
+        except orouter.OpenRouterAuthError as e:
+            _render_openrouter_setup(error=f"{e} — paste a new one.")
+        except Exception as e:
+            st.error(f"OpenRouter: {e}")
+            st.exception(e)
+
+    # ── Footer ────────────────────────────────────────────────────────────────────
+
+    st.caption(f"Updated {datetime.now().strftime('%H:%M:%S')}")
+
+
+render_dashboard()

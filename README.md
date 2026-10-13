@@ -2,6 +2,8 @@
 
 A compact Streamlit dashboard that displays real-time usage and quota data across AI subscriptions. Currently supports **Claude.ai Pro/Max**.
 
+While open, the dashboard automatically refreshes usage data every 10 seconds. Use **↻ Refresh** to fetch an update immediately.
+
 ## How it works
 
 Claude Code stores an OAuth token at `~/.claude/.credentials.json` after you authenticate. The dashboard reads that token and calls Anthropic's internal usage endpoint (`/api/oauth/usage`) to fetch:

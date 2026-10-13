@@ -22,7 +22,7 @@ App listens on port `8501` inside the `private` external Docker network (no host
 
 | File | Purpose |
 |------|---------|
-| `app.py` | Streamlit UI — layout, caching (`ttl=300s`), error handling |
+| `app.py` | Streamlit UI — layout, automatic refresh every 10 seconds, caching (`ttl=REFRESH_INTERVAL_S`), error handling |
 | `claude_usage.py` | Reads `~/.claude/.credentials.json`, calls `https://api.anthropic.com/api/oauth/usage` with `anthropic-beta: oauth-2025-04-20` header |
 | `history.py` | SQLite sample store at `/data/history.db` (`ts, provider, metric, value`, 90-day retention) plus a per-provider `fcntl` lock so the UI and collector never refresh the same OAuth token concurrently |
 | `collector.py` | Background sampler started next to Streamlit by the Dockerfile `CMD`. Samples each provider at most every 10 min, skipping any the UI fetched more recently. `collector.fetch(provider)` is also the UI's fetch path, so both record the same metrics |
@@ -66,7 +66,7 @@ Add to `.env` (gitignored) in project root.
 ### Adding a new provider
 1. Create `<provider>_usage.py` with a `get_usage() -> dict` function and a `KeyMissingError` class
 2. Register it in `collector.PROVIDERS` with a function mapping its payload to the metrics to record
-3. Add a `@st.cache_data(ttl=300)` wrapper calling `collector.fetch("<provider>")` and a `st.container(border=True)` block in `app.py`
+3. Add a `@st.cache_data(ttl=REFRESH_INTERVAL_S)` wrapper calling `collector.fetch("<provider>")` and a `st.container(border=True)` block inside `render_dashboard()` in `app.py`
 4. Reuse `quota_row()` (pass `window_s` to get the pace marker), `credits_row()`, `info_row()` and `history_chart()`
 
 ### Pace
