@@ -1,5 +1,6 @@
 import time
 from datetime import datetime, timedelta, timezone
+from html import escape
 
 import altair as alt
 import pandas as pd
@@ -9,6 +10,7 @@ import chatgpt_auth
 import chatgpt_usage as cgpt
 import claude_auth
 import collector
+import copilot_usage as copilot
 import history
 import openrouter_usage as orouter
 from claude_usage import CredentialsNotFoundError, RateLimitedError, TokenExpiredError
@@ -39,6 +41,10 @@ def fetch_chatgpt():
 @st.cache_data(ttl=REFRESH_INTERVAL_S)
 def fetch_openrouter():
     return collector.fetch("openrouter")
+
+@st.cache_data(ttl=REFRESH_INTERVAL_S)
+def fetch_copilot():
+    return collector.fetch("copilot")
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -91,6 +97,8 @@ def format_reset_time(value) -> str:
             return local.strftime("%-H:%M %Z")
         elif local.date() == (now + timedelta(days=1)).date():
             return local.strftime("tomorrow %-H:%M %Z")
+        elif abs((local.date() - now.date()).days) >= 7:
+            return local.strftime("%b %-d %-H:%M %Z")
         else:
             return local.strftime("%a %-H:%M %Z")
     except Exception:
@@ -540,6 +548,74 @@ def render_dashboard():
         except Exception as e:
             st.error(f"OpenRouter: {e}")
             st.exception(e)
+
+    # ── GitHub Copilot ───────────────────────────────────────────────────────────
+
+    def _render_copilot_setup(error: str | None = None, cancellable: bool = False):
+        with st.container(border=True):
+            st.markdown("**GitHub Copilot**")
+            if error:
+                st.caption(f"⚠ {error}")
+            st.markdown(
+                "Paste a GitHub token that can access your Copilot account. "
+                "See [setup instructions](https://github.com/settings/tokens)."
+            )
+            token = st.text_input("GitHub token", key="copilot_token_input", type="password",
+                                  label_visibility="collapsed", placeholder="GitHub token…")
+            col_save, col_cancel, _ = st.columns([1, 1, 5])
+            if col_save.button("Save", key="copilot_save") and token.strip():
+                try:
+                    copilot.validate_token(token)
+                    copilot.save_token(token)
+                except copilot.CopilotAuthError as ex:
+                    st.error(str(ex))
+                except Exception as ex:
+                    st.error(f"Could not verify token: {ex}")
+                else:
+                    st.session_state.pop("copilot_editing", None)
+                    fetch_copilot.clear()
+                    st.rerun()
+            if cancellable and col_cancel.button("Cancel", key="copilot_cancel"):
+                st.session_state.pop("copilot_editing", None)
+                st.rerun()
+
+    if st.session_state.get("copilot_editing"):
+        _render_copilot_setup(cancellable=True)
+    else:
+        try:
+            copilot_data = fetch_copilot()
+            quotas = copilot_data["quotas"]
+            labels = {"premium_interactions": "premium", "premium_models": "premium models",
+                      "chat": "chat", "completions": "completions",
+                      "session": "session", "weekly": "weekly"}
+            with st.container(border=True):
+                header_col, change_col = st.columns([7, 1])
+                header_col.markdown("**GitHub Copilot**")
+                if change_col.button("change token", key="copilot_change", type="tertiary"):
+                    st.session_state.copilot_editing = True
+                    st.rerun()
+                if copilot_data.get("plan"):
+                    st.caption(f"Plan: {copilot_data['plan']}")
+                if not quotas:
+                    st.caption("GitHub did not provide quota details for this account.")
+                for name, quota in quotas.items():
+                    label = escape(labels.get(name, name.replace("_", " ")))
+                    if quota["unlimited"]:
+                        info_row(label, "unlimited")
+                    else:
+                        quota_row(label, quota["utilization"], quota["reset_at"])
+                series = {name: labels.get(name, name.replace("_", " "))
+                          for name, quota in quotas.items() if quota["utilization"] is not None}
+                if series:
+                    with st.expander(f"History · {HISTORY_DAYS} days"):
+                        history_chart("copilot", dict(list(series.items())[:3]),
+                                      time.time() - HISTORY_DAYS * 86400)
+        except copilot.CopilotTokenMissingError:
+            _render_copilot_setup()
+        except copilot.CopilotAuthError as e:
+            _render_copilot_setup(error=f"{e} — paste a new token.")
+        except Exception as e:
+            st.error(f"GitHub Copilot: {e}")
 
     # ── Footer ────────────────────────────────────────────────────────────────────
 

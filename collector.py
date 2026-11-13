@@ -12,6 +12,7 @@ import time
 
 import chatgpt_usage
 import claude_usage
+import copilot_usage
 import history
 import openrouter_usage
 
@@ -48,10 +49,15 @@ def _openrouter_metrics(data: dict) -> dict:
     return {"spend_month": data.get("spend_month")}
 
 
+def _copilot_metrics(data: dict) -> dict:
+    return {name: quota.get("utilization") for name, quota in data.get("quotas", {}).items()}
+
+
 PROVIDERS = {
     "claude":     (claude_usage, _claude_metrics),
     "chatgpt":    (chatgpt_usage, _chatgpt_metrics),
     "openrouter": (openrouter_usage, _openrouter_metrics),
+    "copilot":    (copilot_usage, _copilot_metrics),
 }
 
 

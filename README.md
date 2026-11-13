@@ -1,6 +1,6 @@
 # AI Quota Dashboard
 
-A compact Streamlit dashboard that displays real-time usage and quota data across AI subscriptions. Currently supports **Claude.ai Pro/Max**.
+A compact Streamlit dashboard that displays usage and quota data across Claude, ChatGPT, OpenRouter, and GitHub Copilot accounts.
 
 While open, the dashboard automatically refreshes usage data every 10 seconds. Use **↻ Refresh** to fetch an update immediately.
 
@@ -72,6 +72,12 @@ On first load the OpenRouter card asks you to paste a key. It's checked against 
 - **Management key** ([settings → management keys](https://openrouter.ai/settings/management-keys)): spend this UTC month summed across all keys in the default workspace, plus the most recently used model.
 - **Regular API key**: spend this UTC month for that key only. OpenRouter only exposes model activity to management keys, so the last model isn't shown.
 
+## GitHub Copilot setup
+
+Create a [classic GitHub personal access token](https://github.com/settings/tokens) for the account with Copilot access, and paste it into the GitHub Copilot card. The dashboard verifies the token before saving it to `/data/copilot_token.json` in the persistent `chatgpt_data` volume. Use **change token** to replace it.
+
+The card shows the quota percentages, reset dates, and unlimited allowances GitHub returns for the account, with seven days of history. GitHub's internal Copilot account endpoint is also used by VS Code, but is undocumented and can change. The available quotas depend on the plan; some organization-managed accounts do not expose usable quota details. This card does not show organization-wide billing usage.
+
 ## Project structure
 
 ```
@@ -79,6 +85,7 @@ app.py              # Streamlit UI
 claude_usage.py     # Anthropic OAuth usage API client
 openai_usage.py     # OpenAI usage API client
 openrouter_usage.py # OpenRouter spend + last-used model
+copilot_usage.py    # GitHub Copilot account quotas
 history.py          # SQLite usage history
 collector.py        # Background history sampler
 Dockerfile
