@@ -44,6 +44,14 @@ Traefik and Caddy handle WebSocket upgrades automatically.
 docker compose up -d --build
 ```
 
+### Production deployment with GitHub Actions
+
+Pushes to `main` and manual runs of **Deploy dashboard** build and deploy production on the repository's self-hosted runner. Pull requests do not trigger deployment. The workflow checks that the triggering commit is still the tip of `main`, builds and tests the image before replacing the container, waits for its health check, and attempts to restore the previous image if deployment fails.
+
+Production uses [deploy/compose.production.yml](deploy/compose.production.yml), including the existing `/HDD/docker-data/apps/ai-quota-dashboard/dashboard/data` bind mount, `/HDD/development/ai-quota-dashboard/.env`, and `private` and `ai-quota-dashboard-local` networks. The development Compose project and volume remain separate. No image registry is required. The old Murphy deployment metadata is not used by the workflow.
+
+The repository is public and its self-hosted runner has Docker access, which is effectively administrator access to the host. Only trusted users should be able to modify workflows or run untrusted code on this runner; see [GitHub's self-hosted runner security guidance](https://docs.github.com/en/actions/reference/security/secure-use#self-hosted-runners). Keep pull request workflows off this runner. Restrict repository write access and review changes to workflows and deployment scripts.
+
 ## OpenAI setup
 
 Create a `.env` file in the project root (gitignored):
