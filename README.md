@@ -53,11 +53,15 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The tag must point to a commit containing the tag-based workflow. Pushing an existing tag again or deleting a tag does not deploy. The workflow builds and tests the image before replacing the container, waits for its health check, and attempts to restore the previous image if deployment fails. Deployment restores the previous image only; it does not roll back persistent data.
+The tag must point to a commit containing the tag-based workflow. Pushing an existing tag again or deleting a tag does not deploy. The project calls the independent [Server Deploy Actions](https://github.com/ftechhelp/server-deploy-actions) reusable workflow, pinned to a reviewed commit. Its host engine has no Murphy dependency.
 
-Production uses [deploy/compose.production.yml](deploy/compose.production.yml), including the existing `/HDD/docker-data/apps/ai-quota-dashboard/dashboard/data` bind mount, `/HDD/development/ai-quota-dashboard/.env`, and `private` and `ai-quota-dashboard-local` networks. The development Compose project and volume remain separate. No image registry is required. The old Murphy deployment metadata is not used by the workflow.
+The engine plans changes, verifies approvals and drift, builds and tests images, publishes unique Docker Hub tags, deploys immutable digests, checks ZFS capacity and boot mounts, verifies migrations, retains recovery snapshots, manages NPM proxy/TLS settings, and records release history. Failed application activation restores the exact prior Compose artifact and protected environment snapshot. Persistent data is never rolled back automatically.
 
-The repository is public and its self-hosted runner has Docker access, which is effectively administrator access to the host. Only trusted users should be able to modify workflows or run untrusted code on this runner; see [GitHub's self-hosted runner security guidance](https://docs.github.com/en/actions/reference/security/secure-use#self-hosted-runners). Keep pull request workflows off this runner. Restrict repository write access and review changes to workflows and deployment scripts.
+The [project manifest](deploy/app.json) declares `/data` as database storage because it contains SQLite. The engine's intended destination is `/SSD/databases/ai-quota-dashboard/dashboard/data`; adoption/migration of the existing HDD data requires explicit approval before the first release. Original data remains at `/HDD/docker-data/apps/ai-quota-dashboard/dashboard/data` for recovery. The engine's production environment file is `/etc/server-deploy/apps/ai-quota-dashboard.env`; credentials and policy remain protected on the host. Development keeps its own Compose project and volume.
+
+Use **Actions → Production maintenance → Run workflow** for inspection, adoption, environment recreation, rollback to a saved release, recovery, and migration acceptance. `plan_only` defaults to true. Read the generated plan before running it with the listed approval categories. Initial reconciliation needs `deployment,downtime,adoption,data-migration`; ordinary subsequent tagged releases need only deployment and downtime. Rollback requires a saved release ID and downtime approval.
+
+The repository is public. Only trusted users should be able to change workflows, create release tags, or run jobs on this deployment runner; see [GitHub's self-hosted runner security guidance](https://docs.github.com/en/actions/reference/security/secure-use#self-hosted-runners). The runner invokes a root-owned deployment engine through a restricted sudo entry. Keep pull request workflows off this runner.
 
 ## OpenAI setup
 

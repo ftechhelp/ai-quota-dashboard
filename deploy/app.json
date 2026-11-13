@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "app": "ai-quota-dashboard",
+  "compose": "docker-compose.yml",
+  "primary": "dashboard",
+  "port": 8501,
+  "stores": [
+    {"name": "data", "service": "dashboard", "target": "/data", "kind": "database"}
+  ],
+  "test": ["python", "-B", "-m", "unittest", "discover", "-s", "/workspace/tests", "-v"]
+}

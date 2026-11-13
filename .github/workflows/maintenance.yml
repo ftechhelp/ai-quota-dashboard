@@ -1,0 +1,35 @@
+name: Production maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Operation to plan or run
+        type: choice
+        options: [inspect, status, reconcile, recreate, rollback, recover, accept]
+        default: inspect
+      plan_only:
+        description: Only generate a reviewable plan
+        type: boolean
+        default: true
+      approvals:
+        description: Explicit approved categories, separated by commas
+        type: string
+        default: ''
+      target:
+        description: Saved release ID for rollback
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  maintain:
+    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@9be548d48ca49e7ac5516be3290b303af4fd7aa7
+    with:
+      app: ai-quota-dashboard
+      operation: ${{ inputs.operation }}
+      plan-only: ${{ inputs.plan_only }}
+      approvals: ${{ inputs.approvals }}
+      target: ${{ inputs.target }}

@@ -8,21 +8,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ai-quota-dashboard-production
-  cancel-in-progress: false
-
 jobs:
   deploy:
-    if: github.event.created == true && github.event.deleted == false
-    runs-on: [self-hosted, linux, x64, ai-quota-dashboard]
-    timeout-minutes: 20
-    steps:
-      - name: Check out the triggering commit
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-      - name: Validate Python
-        run: python3 -m compileall -q .
-      - name: Build and deploy
-        run: bash deploy/deploy.sh
+    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@9be548d48ca49e7ac5516be3290b303af4fd7aa7
+    with:
+      app: ai-quota-dashboard
