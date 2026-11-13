@@ -15,7 +15,7 @@ services:
       - path: .env
         required: false
     environment:
-      - TZ=America/Los_Angeles
+      - TZ=America/Arizona
     volumes:
       - chatgpt_data:/data
     networks:
