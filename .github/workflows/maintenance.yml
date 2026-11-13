@@ -20,16 +20,21 @@ on:
         description: Saved release ID for rollback
         type: string
         default: ''
+      plan_id:
+        description: Exact reviewed plan ID to apply; blank creates a fresh plan
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 jobs:
   maintain:
-    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@d9bc52ad9d96d06f238722b35fe19a5ba43086f3
+    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@584eb5e05987696637dbfd3abef6e9281fe4c95a
     with:
       app: ai-quota-dashboard
       operation: ${{ inputs.operation }}
       plan-only: ${{ inputs.plan_only }}
       approvals: ${{ inputs.approvals }}
       target: ${{ inputs.target }}
+      plan-id: ${{ inputs.plan_id }}

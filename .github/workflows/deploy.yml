@@ -10,6 +10,6 @@ permissions:
 
 jobs:
   deploy:
-    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@d9bc52ad9d96d06f238722b35fe19a5ba43086f3
+    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@584eb5e05987696637dbfd3abef6e9281fe4c95a
     with:
       app: ai-quota-dashboard
