@@ -19,13 +19,6 @@ docker run --rm --network none --read-only --tmpfs /tmp:rw,exec,nosuid,nodev \
   --entrypoint python "$DASHBOARD_IMAGE" \
   -B -m unittest discover -s /tests -v
 
-# A newer push may have landed while the image was building.
-latest=$(git ls-remote https://github.com/ftechhelp/ai-quota-dashboard.git refs/heads/main | cut -f1)
-if [[ "$latest" != "$GITHUB_SHA" ]]; then
-  echo "The main branch has moved; refusing to deploy an older commit." >&2
-  exit 1
-fi
-
 if "${compose[@]}" up -d --no-build --wait --wait-timeout 90 dashboard; then
   echo "Deployed ${GITHUB_SHA}"
   exit 0

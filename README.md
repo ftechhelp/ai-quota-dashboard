@@ -46,7 +46,14 @@ docker compose up -d --build
 
 ### Production deployment with GitHub Actions
 
-Pushes to `main` and manual runs of **Deploy dashboard** build and deploy production on the repository's self-hosted runner. Pull requests do not trigger deployment. The workflow checks that the triggering commit is still the tip of `main`, builds and tests the image before replacing the container, waits for its health check, and attempts to restore the previous image if deployment fails.
+Pushing a new Git tag builds and deploys that tagged commit to production on the repository's self-hosted runner. Branch pushes and pull requests do not deploy. For example, after committing and pushing the changes to `main`:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The tag must point to a commit containing the tag-based workflow. Pushing an existing tag again or deleting a tag does not deploy. The workflow builds and tests the image before replacing the container, waits for its health check, and attempts to restore the previous image if deployment fails. Deployment restores the previous image only; it does not roll back persistent data.
 
 Production uses [deploy/compose.production.yml](deploy/compose.production.yml), including the existing `/HDD/docker-data/apps/ai-quota-dashboard/dashboard/data` bind mount, `/HDD/development/ai-quota-dashboard/.env`, and `private` and `ai-quota-dashboard-local` networks. The development Compose project and volume remain separate. No image registry is required. The old Murphy deployment metadata is not used by the workflow.
 

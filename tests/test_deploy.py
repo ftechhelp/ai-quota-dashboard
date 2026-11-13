@@ -22,17 +22,14 @@ class DeployTests(unittest.TestCase):
 echo "${DASHBOARD_IMAGE:-} $*" >> "$DOCKER_LOG"
 if [[ "$1" == inspect ]]; then echo sha256:previous; exit 0; fi
 if [[ "$*" == *' build dashboard' && "${FAIL_BUILD:-}" == 1 ]]; then exit 1; fi
+if [[ "$1" == run && "${FAIL_TEST:-}" == 1 ]]; then exit 1; fi
 if [[ "$*" == *' up '* && "${FAIL_UP:-}" == 1 &&
       "$DASHBOARD_IMAGE" != sha256:previous ]]; then exit 1; fi
 """)
         docker.chmod(0o755)
-        git = self.bin / "git"
-        git.write_text('#!/bin/bash\nprintf "%s\\trefs/heads/main\\n" "$LATEST_SHA"\n')
-        git.chmod(0o755)
         self.sha = "a" * 40
         self.env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}",
-                    "DOCKER_LOG": str(self.log), "GITHUB_SHA": self.sha,
-                    "LATEST_SHA": self.sha}
+                    "DOCKER_LOG": str(self.log), "GITHUB_SHA": self.sha}
 
     def run_deploy(self):
         return subprocess.run(["bash", "deploy/deploy.sh"], cwd=self.root,
@@ -60,10 +57,15 @@ if [[ "$*" == *' up '* && "${FAIL_UP:-}" == 1 &&
         self.assertNotEqual(self.run_deploy().returncode, 0)
         self.assertNotIn(" up ", self.log.read_text())
 
-    def test_outdated_commit_does_not_replace_container(self):
-        self.env["LATEST_SHA"] = "b" * 40
+    def test_failed_tests_do_not_replace_container(self):
+        self.env["FAIL_TEST"] = "1"
         self.assertNotEqual(self.run_deploy().returncode, 0)
         self.assertNotIn(" up ", self.log.read_text())
+
+    def test_invalid_commit_does_not_invoke_docker(self):
+        self.env["GITHUB_SHA"] = "invalid"
+        self.assertNotEqual(self.run_deploy().returncode, 0)
+        self.assertFalse(self.log.exists())
 
 
 if __name__ == "__main__":
