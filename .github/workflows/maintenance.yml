@@ -26,7 +26,7 @@ permissions:
 
 jobs:
   maintain:
-    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@9be548d48ca49e7ac5516be3290b303af4fd7aa7
+    uses: ftechhelp/server-deploy-actions/.github/workflows/deploy.yml@d9bc52ad9d96d06f238722b35fe19a5ba43086f3
     with:
       app: ai-quota-dashboard
       operation: ${{ inputs.operation }}
